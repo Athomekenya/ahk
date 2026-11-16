@@ -208,7 +208,7 @@ export async function sendNewsletterWelcomeEmail(subscriberEmail: string) {
       console.log(`[EmailService SUCCESS] ✅ Welcome email delivered to: ${subscriberEmail}`);
       return { success: true };
     } catch (err) {
-      console.error("[EmailService ERROR] ❌ Failed to send welcome email to subscriber:", err);
+      console.error("[EmailService ERROR] ❌ Failed to send welcome email to subscriber:", err instanceof Error ? err.message : "unknown error");
       return { success: false, error: err };
     }
   } else {
@@ -273,14 +273,14 @@ export async function sendNewsletterAdminNotification(subscriberEmail: string, s
         html,
         text: `New Newsletter Subscriber!\n\nEmail: ${subscriberEmail}\nSource: ${source}\nTimestamp: ${timestamp}\n`,
       });
-      console.log(`[EmailService SUCCESS] ✅ Admin notification delivered to: ${to}${bcc ? ` (BCC: ${bcc.join(", ")})` : ""}`);
+      console.log(`[EmailService SUCCESS] ✅ Admin notification delivered to: ${to}`);
       return { success: true };
     } catch (err) {
-      console.error("[EmailService ERROR] ❌ Failed to send admin notification:", err);
+      console.error("[EmailService ERROR] ❌ Failed to send admin notification:", err instanceof Error ? err.message : "unknown error");
       return { success: false, error: err };
     }
   } else {
-    console.log(`[EmailService DEV] Admin notification simulated for: ${subscriberEmail} -> ${to}${bcc ? ` (BCC: ${bcc.join(", ")})` : ""}`);
+    console.log(`[EmailService DEV] Admin notification simulated for: ${subscriberEmail} -> ${to}`);
     return { success: true, simulated: true };
   }
 }
@@ -418,7 +418,7 @@ export async function sendJobApplicationApplicantConfirmation(
       console.log(`[EmailService SUCCESS] ✅ Job application confirmation delivered to applicant: ${applicantEmail}`);
       return { success: true };
     } catch (err) {
-      console.error("[EmailService ERROR] ❌ Failed to send job application confirmation to applicant:", err);
+      console.error("[EmailService ERROR] ❌ Failed to send job application confirmation to applicant:", err instanceof Error ? err.message : "unknown error");
       return { success: false, error: err };
     }
   } else {
