@@ -227,6 +227,7 @@ Applicant confirmed declaration: ${get("declaration") === "true" ? "Yes" : "No"}
             mailError instanceof Error ? mailError.message : "unknown error"
           );
         })
+      );
     } else {
       console.log(`[JOB APPLICATION RECEIVED SERVERSIDE] ${fullName} - ${position} (${email}, ${phone})`);
     }
