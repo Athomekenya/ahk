@@ -1,0 +1,236 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CLIENT
+  CAREGIVER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  MATCHED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum VisitStatus {
+  SCHEDULED
+  COMPLETED
+  MISSED
+}
+
+model User {
+  id                     String                  @id @default(uuid())
+  email                  String                  @unique
+  name                   String?
+  phone                  String?
+  password               String?                 // For credentials provider
+  role                   Role                    @default(CLIENT)
+  country                String?                 @default("Kenya")
+  isDiaspora             Boolean                 @default(false)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  patients               Patient[]
+  bookings               BookingRequest[]
+  equipmentLeaseRequests EquipmentLeaseRequest[]
+  accounts               Account[]
+  sessions               Session[]
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Patient {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  dob            DateTime
+  relationship   String
+  conditionNotes String?          @db.Text
+  county         String
+  town           String
+  address        String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  bookings       BookingRequest[]
+}
+
+model Caregiver {
+  id                   String      @id @default(uuid())
+  name                 String
+  bio                  String?     @db.Text
+  photoUrl             String?
+  qualifications       String[]
+  specialties          String[]
+  yearsExperience      Int
+  nursingCouncilRegNo  String?     @unique
+  verified             Boolean     @default(false)
+  ratingAvg            Float       @default(5.0)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  visits               CareVisit[]
+}
+
+model ServiceCategory {
+  id                   String           @id @default(uuid())
+  name                 String
+  slug                 String           @unique
+  description          String?          @db.Text
+  iconKey              String?
+  indicativePriceFrom  Float?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  bookings             BookingRequest[]
+}
+
+model BookingRequest {
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patientId         String
+  patient           Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  serviceCategoryId String
+  serviceCategory   ServiceCategory @relation(fields: [serviceCategoryId], references: [id])
+  frequency         String
+  startDate         DateTime
+  county            String
+  town              String
+  isDiaspora        Boolean         @default(false)
+  status            BookingStatus   @default(PENDING)
+  notes             String?         @db.Text
+  mpesaRef          String?
+  stripePaymentId   String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  visits            CareVisit[]
+}
+
+model CareVisit {
+  id          String      @id @default(uuid())
+  bookingId   String
+  booking     BookingRequest @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  caregiverId String
+  caregiver   Caregiver   @relation(fields: [caregiverId], references: [id])
+  scheduledAt DateTime
+  completedAt DateTime?
+  careNote    String?     @db.Text
+  status      VisitStatus @default(SCHEDULED)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Testimonial {
+  id          String   @id @default(uuid())
+  name        String
+  relationship String
+  rating      Int      @default(5)
+  body        String   @db.Text
+  avatarUrl   String?
+  isDiaspora  Boolean  @default(false)
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model BlogPost {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String    @unique
+  excerpt     String?   @db.Text
+  body        String    @db.Text
+  coverImage  String?
+  author      String
+  category    String
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model FAQ {
+  id        String   @id @default(uuid())
+  question  String
+  answer    String   @db.Text
+  category  String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model JobApplication {
+  id             String   @id @default(uuid())
+  name           String
+  email          String
+  phone          String
+  roleAppliedFor String
+  cvUrl          String?
+  coverNote      String?  @db.Text
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model EquipmentItem {
+  id                     String                  @id @default(uuid())
+  name                   String
+  category               String
+  dailyRate              Float
+  weeklyRate             Float
+  imageUrl               String?
+  available              Boolean                 @default(true)
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  leases                 EquipmentLeaseRequest[]
+}
+
+model EquipmentLeaseRequest {
+  id              String        @id @default(uuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  equipmentId     String
+  equipment       EquipmentItem @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  startDate       DateTime
+  endDate         DateTime
+  deliveryAddress String
+  status          String        @default("PENDING")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model NewsletterSubscriber {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  subscribedAt DateTime @default(now())
+}

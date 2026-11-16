@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand Color Palette */
+  --color-ivory: #f3f3f3;          /* New Background */
+  --color-sage: #8277cd;           /* Accent 2 (Purple) */
+  --color-sage-light: #f0edf7;     /* Light Purple variant */
+  --color-terracotta: #d319d4;     /* Accent 1 (Magenta) */
+  --color-near-black: #363636;     /* New Foreground */
+  --color-card-white: #FFFFFF;
+  --color-border: #dfdfdf;         /* Derived border */
+  --color-muted: #707070;          /* Derived muted */
+  --color-gold: #30d5c6;           /* Accent 3 (Teal/Cyan) */
+  --color-success: #2F7A4F;
+
+  /* Spacing (8pt grid) */
+  --space-xs: 8px;
+  --space-sm: 16px;
+  --space-md: 24px;
+  --space-lg: 40px;
+  --space-xl: 64px;
+  --space-2xl: 96px;
+
+  /* Typography Scale */
+  --text-hero: clamp(2.5rem, 6vw, 4.5rem);
+  --text-h1: clamp(1.875rem, 4vw, 3rem);
+  --text-h2: clamp(1.5rem, 3vw, 2.125rem);
+  --text-h3: 1.375rem;
+  --text-body: 1.0625rem; /* 17px base for accessibility */
+  --text-small: 0.9375rem;
+  --text-label: 0.8125rem;
+}
+
+body {
+  color: var(--color-near-black);
+  background-color: var(--color-ivory);
+  font-family: 'DM Sans', 'Public Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Accessibility: respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Base Headings styling */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', 'Fraunces', 'Lora', Georgia, serif;
+  color: var(--color-near-black);
+  font-weight: 500;
+}
+
+/* Tap targets minimum size utility for touch devices */
+.tap-target {
+  min-height: 48px;
+  min-width: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Trust ticker marquee animation */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Respect prefers-reduced-motion for marquee */
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-"] {
+    animation: none !important;
+  }
+}
+
