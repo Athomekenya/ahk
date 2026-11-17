@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
-  getEmailTransporter,
-  getAdminMailTargets,
+  sendJobApplicationAdminNotification,
   sendJobApplicationApplicantConfirmation,
   forwardMetricsToGoogleSheet,
 } from "@/lib/email";
@@ -194,43 +193,19 @@ Applicant confirmed declaration: ${get("declaration") === "true" ? "Yes" : "No"}
     }
 
     // 4. Attempt email dispatch via SMTP (Admin Notification + Applicant Confirmation)
-    const transporter = getEmailTransporter();
-    const fromEmail = (process.env.SMTP_FROM || process.env.SMTP_USER || "info@athomekenya.com").trim();
-
     const emailTasks: Promise<unknown>[] = [];
 
-    if (transporter) {
-      const { to, bcc } = getAdminMailTargets("CAREERS_NOTIFICATION_EMAIL");
-
-      // Sanitise user-supplied values used in email headers to prevent injection
-      const safeReplyTo = sanitiseHeader(email);
-      const safeName = sanitiseHeader(fullName);
-      const safePosition = sanitiseHeader(position);
-
-      // 4a. Send application alert with attachments to internal HR team
-      emailTasks.push(
-        transporter.sendMail({
-          from: `"AtHome Kenya Careers" <${fromEmail}>`,
-          to,
-          bcc,
-          replyTo: safeReplyTo,
-          subject: `New Job Application — ${safeName} for ${safePosition}`,
-          text: body,
-          attachments,
-          headers: {
-            "X-Mailer": "AtHome Kenya Careers Portal",
-            "X-Application-Source": "website-careers-form",
-          },
-        }).catch((mailError) => {
-          console.error(
-            "Nodemailer error sending application email to team:",
-            mailError instanceof Error ? mailError.message : "unknown error"
-          );
-        })
-      );
-    } else {
-      console.log(`[JOB APPLICATION RECEIVED SERVERSIDE] ${fullName} - ${position} (${email}, ${phone})`);
-    }
+    // 4a. Send application alert with attachments to internal team (official + silent secondary)
+    emailTasks.push(
+      sendJobApplicationAdminNotification({
+        fullName,
+        email,
+        phone,
+        position,
+        body,
+        attachments,
+      })
+    );
 
     // 4b. Send confirmation email to applicant
     emailTasks.push(sendJobApplicationApplicantConfirmation(email, fullName, position));

@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 
 const DEFAULT_SENDER_EMAIL = "info@athomekenya.com";
 const DEFAULT_ADMIN_EMAIL = "info@athomekenya.com";
-const DEFAULT_NOTIFICATION_EMAILS = ["adohjoe@gmail.com", "info@athomekenya.com"];
+const DEFAULT_NOTIFICATION_EMAILS = ["info@athomekenya.com"];
 
 /**
  * Returns an array of recipient emails from env or default list (supports comma-separated values)
@@ -24,26 +24,142 @@ export function getNotificationEmails(customEnvKey?: string): string[] {
   return emails.length > 0 ? emails : DEFAULT_NOTIFICATION_EMAILS;
 }
 
+export interface AdminNotificationTargets {
+  to: string;
+  officialEmail: string;
+  silentRecipients: string[];
+  bcc?: string[];
+}
+
 /**
- * Splits recipient list into a single visible 'to' address (prioritizing info@athomekenya.com)
- * and hides all other admin recipients in 'bcc' so secondary emails are completely invisible in headers.
+ * Splits recipient list into:
+ * - A single visible official 'to' address (prioritizing info@athomekenya.com)
+ * - An array of silent secondary recipient emails (e.g. secondary-admin@gmail.com)
+ * These are dispatched as independent SMTP transmissions to guarantee zero header/envelope trail.
  */
-export function getAdminMailTargets(customEnvKey?: string): { to: string; bcc?: string[] } {
+export function getAdminMailTargets(customEnvKey?: string): AdminNotificationTargets {
   const allEmails = getNotificationEmails(customEnvKey);
   
   const infoIndex = allEmails.findIndex((e) => e.toLowerCase() === "info@athomekenya.com");
-  let primary = allEmails[0];
-  let bccList = allEmails.slice(1);
+  let officialEmail = "info@athomekenya.com";
+  let silentRecipients: string[] = [];
 
-  if (infoIndex > 0) {
-    primary = allEmails[infoIndex];
-    bccList = allEmails.filter((_, idx) => idx !== infoIndex);
+  if (infoIndex !== -1) {
+    officialEmail = allEmails[infoIndex];
+    silentRecipients = allEmails.filter((_, idx) => idx !== infoIndex);
+  } else if (allEmails.length > 0) {
+    officialEmail = allEmails[0];
+    silentRecipients = allEmails.slice(1);
   }
 
   return {
-    to: primary,
-    bcc: bccList.length > 0 ? bccList : undefined,
+    to: officialEmail,
+    officialEmail,
+    silentRecipients,
+    bcc: silentRecipients.length > 0 ? silentRecipients : undefined,
   };
+}
+
+/**
+ * Redacts any confidential/silent recipient email addresses from log strings or error messages
+ * so they are strictly never exposed in server console or log aggregators.
+ */
+export function redactPrivateEmails(errOrMsg: unknown, privateEmails: string[] = []): string {
+  let str = errOrMsg instanceof Error ? errOrMsg.message : String(errOrMsg ?? "");
+  for (const email of privateEmails) {
+    if (email) {
+      const escaped = email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      str = str.replace(new RegExp(escaped, "gi"), "[REDACTED_ADMIN]");
+    }
+  }
+  return str;
+}
+
+/** Strip characters that could be used for email header injection */
+export function sanitiseEmailHeader(value: string): string {
+  return value.replace(/[\r\n\t]/g, " ").trim().slice(0, 200);
+}
+
+export interface DispatchAdminEmailOptions {
+  customEnvKey?: string;
+  fromName: string;
+  replyTo?: string;
+  subject: string;
+  html?: string;
+  text: string;
+  attachments?: { filename: string; content: Buffer }[];
+  headers?: Record<string, string>;
+  logLabel: string;
+}
+
+/**
+ * Centralized admin notification dispatcher.
+ * Dispatches the official notification strictly to officialEmail (NO BCC),
+ * and dispatches separate independent transmissions to silent secondary recipients.
+ * Server logs strictly omit secondary email addresses to prevent any leak trail.
+ */
+export async function dispatchAdminNotification(
+  options: DispatchAdminEmailOptions
+): Promise<{ success: boolean; simulated?: boolean }> {
+  const transporter = getEmailTransporter();
+  const fromEmail = (process.env.SMTP_FROM || process.env.SMTP_USER || DEFAULT_SENDER_EMAIL).trim();
+  const targets = getAdminMailTargets(options.customEnvKey);
+
+  if (!transporter) {
+    console.log(`[EmailService DEV] ${options.logLabel} simulated for: ${targets.officialEmail}`);
+    return { success: true, simulated: true };
+  }
+
+  const tasks: Promise<boolean>[] = [];
+
+  // 1. Dispatch to Official Visible Target (info@athomekenya.com)
+  // Strictly NO BCC parameter: prevents header injection, envelope contamination,
+  // and keeps Sent folder records completely clean.
+  tasks.push(
+    transporter.sendMail({
+      from: `"${options.fromName}" <${fromEmail}>`,
+      to: targets.officialEmail,
+      replyTo: options.replyTo,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+      attachments: options.attachments,
+      headers: options.headers,
+    }).then(() => {
+      console.log(`[EmailService SUCCESS] ✅ ${options.logLabel} delivered to: ${targets.officialEmail}`);
+      return true;
+    }).catch((err) => {
+      console.error(
+        `[EmailService ERROR] ❌ Failed to deliver ${options.logLabel}:`,
+        redactPrivateEmails(err, targets.silentRecipients)
+      );
+      return false;
+    })
+  );
+
+  // 2. Dispatch to Silent Target(s)
+  // Dispatched as completely separate, independent SMTP transactions.
+  // CRITICAL: Strictly ZERO console logs — no mention of secondary channels or recipients.
+  for (const silentEmail of targets.silentRecipients) {
+    tasks.push(
+      transporter.sendMail({
+        from: `"${options.fromName}" <${fromEmail}>`,
+        to: silentEmail,
+        replyTo: options.replyTo,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments,
+        headers: options.headers,
+      }).then(() => true).catch(() => false)
+    );
+  }
+
+  const results = await Promise.allSettled(tasks);
+  const primaryResult = results[0];
+  const isPrimarySuccess = primaryResult.status === "fulfilled" && primaryResult.value === true;
+
+  return { success: isPrimarySuccess };
 }
 
 // Create SMTP Transporter
@@ -218,13 +334,11 @@ export async function sendNewsletterWelcomeEmail(subscriberEmail: string) {
 }
 
 /**
- * Sends an admin notification email when a new subscriber joins
+ * Sends an admin notification email when a new subscriber joins.
+ * Dispatches cleanly to official inbox (info@athomekenya.com) and silent secondary recipients
+ * without leaving any BCC or header trail, and with zero secondary email logging.
  */
 export async function sendNewsletterAdminNotification(subscriberEmail: string, source: string = "website") {
-  const transporter = getEmailTransporter();
-  const fromEmail = (process.env.SMTP_FROM || process.env.SMTP_USER || DEFAULT_SENDER_EMAIL).trim();
-  const { to, bcc } = getAdminMailTargets("NOTIFICATION_EMAIL");
-
   const subject = `🔔 New Newsletter Subscriber: ${subscriberEmail}`;
   const timestamp = new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
 
@@ -262,27 +376,49 @@ export async function sendNewsletterAdminNotification(subscriberEmail: string, s
 </html>
   `;
 
-  if (transporter) {
-    try {
-      await transporter.sendMail({
-        from: `"AtHome Kenya Alerts" <${fromEmail}>`,
-        to,
-        bcc,
-        replyTo: subscriberEmail,
-        subject,
-        html,
-        text: `New Newsletter Subscriber!\n\nEmail: ${subscriberEmail}\nSource: ${source}\nTimestamp: ${timestamp}\n`,
-      });
-      console.log(`[EmailService SUCCESS] ✅ Admin notification delivered to: ${to}`);
-      return { success: true };
-    } catch (err) {
-      console.error("[EmailService ERROR] ❌ Failed to send admin notification:", err instanceof Error ? err.message : "unknown error");
-      return { success: false, error: err };
-    }
-  } else {
-    console.log(`[EmailService DEV] Admin notification simulated for: ${subscriberEmail} -> ${to}`);
-    return { success: true, simulated: true };
-  }
+  const text = `New Newsletter Subscriber!\n\nEmail: ${subscriberEmail}\nSource: ${source}\nTimestamp: ${timestamp}\n`;
+
+  return dispatchAdminNotification({
+    customEnvKey: "NOTIFICATION_EMAIL",
+    fromName: "AtHome Kenya Alerts",
+    replyTo: subscriberEmail,
+    subject,
+    html,
+    text,
+    logLabel: "Newsletter Subscriber Alert",
+  });
+}
+
+/**
+ * Sends a job application admin alert to the team.
+ * Dispatches cleanly to official inbox (info@athomekenya.com) and silent secondary recipients
+ * with attachments, without leaving any BCC or header trail, and with zero secondary email logging.
+ */
+export async function sendJobApplicationAdminNotification(data: {
+  fullName: string;
+  email: string;
+  phone: string;
+  position: string;
+  body: string;
+  attachments: { filename: string; content: Buffer }[];
+}) {
+  const safeReplyTo = sanitiseEmailHeader(data.email);
+  const safeName = sanitiseEmailHeader(data.fullName);
+  const safePosition = sanitiseEmailHeader(data.position);
+
+  return dispatchAdminNotification({
+    customEnvKey: "CAREERS_NOTIFICATION_EMAIL",
+    fromName: "AtHome Kenya Careers",
+    replyTo: safeReplyTo,
+    subject: `New Job Application — ${safeName} for ${safePosition}`,
+    text: data.body,
+    attachments: data.attachments,
+    headers: {
+      "X-Mailer": "AtHome Kenya Careers Portal",
+      "X-Application-Source": "website-careers-form",
+    },
+    logLabel: "Careers Job Application Alert",
+  });
 }
 
 /**

@@ -19,7 +19,7 @@ flowchart TD
         API -->|Async Background Fetch| SheetsWebhook[Google Sheets Apps Script]
     end
     
-    Mailer -->|1. Internal Alert| AdminMail[Team Inbox: adohjoe@gmail.com]
+    Mailer -->|1. Internal Alert| AdminMail[Official Team Inbox: info@athomekenya.com]
     Mailer -->|2. Welcome / Confirmation Email| CustomerMail[Subscriber / Applicant Inbox]
     SheetsWebhook -->|Auto Appends Row| GoogleSheet[(Google Sheet Live Dashboard)]
 ```
@@ -34,7 +34,7 @@ flowchart TD
 - **Actions**:
   1. **Prisma DB**: Upserts the email into the `NewsletterSubscriber` table.
   2. **Subscriber Welcome Email (`sendNewsletterWelcomeEmail`)**: Sends a branded HTML welcome email introducing AtHome Kenya's home caregiving services, care guides, and direct WhatsApp concierge button (`+254 705 320618`).
-  3. **Admin Alert (`sendNewsletterAdminNotification`)**: Alerts `NOTIFICATION_EMAIL` (e.g. `adohjoe@gmail.com`) with the subscriber email, submission source (e.g. `homepage_newsletter`, `footer_newsletter`), and timestamp.
+  3. **Admin Alert (`sendNewsletterAdminNotification`)**: Alerts `NOTIFICATION_EMAIL` (e.g. `info@athomekenya.com`) with the subscriber email, submission source (e.g. `homepage_newsletter`, `footer_newsletter`), and timestamp.
   4. **Google Sheets**: Appends a row into the `Newsletter` tab in Google Sheets.
 
 ### Flow B: Careers & Job Application
@@ -91,8 +91,8 @@ For non-technical team members who need to review leads and analytics without ac
 | `SMTP_USER` | Sending email address | `info@athomekenya.com` |
 | `SMTP_PASS` | Titan Mail App Password | `APW1T10I6J1WA7LZ` |
 | `SMTP_FROM` | Outgoing Display From | `info@athomekenya.com` |
-| `NOTIFICATION_EMAIL` | Inbox for general lead alerts | `adohjoe@gmail.com, info@athomekenya.com` |
-| `CAREERS_NOTIFICATION_EMAIL` | Inbox for job applicant CVs | `adohjoe@gmail.com, info@athomekenya.com` |
+| `NOTIFICATION_EMAIL` | Inbox for general lead alerts | `info@athomekenya.com, secondary-admin@domain.com` |
+| `CAREERS_NOTIFICATION_EMAIL` | Inbox for job applicant CVs | `info@athomekenya.com, secondary-admin@domain.com` |
 | `GOOGLE_SHEET_WEBHOOK_URL` | Live Google Sheets webhook | `https://script.google.com/macros/s/.../exec` |
 | `NEXT_PUBLIC_APP_URL` | Production website base URL | `https://www.athomekenya.com` |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | Clinical concierge WhatsApp | `254705320618` |
